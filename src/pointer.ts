@@ -19,6 +19,11 @@ export interface PointerHost {
     getScrollMetrics(scrollTop?: number): ScrollMetrics;
     /** Editor Y for a panel Y, or null when the global ratio should be used. */
     mapToEditor(minimapY: number): number | null;
+    /**
+     * Take the editor to the position drawn at `localY`, as a document
+     * position. Returns false when only the pixel mapping can answer.
+     */
+    jumpToPosition(localY: number, center: boolean): boolean;
     onScrolled(): void;
 }
 
@@ -88,7 +93,7 @@ export class MinimapPointer {
         } else {
             // A click on the track does move the view, to that position.
             this.grabFraction = 0;
-            this.scrollToClientY(event.clientY);
+            this.scrollToClientY(event.clientY, true);
         }
 
         activeDocument.addEventListener("mousemove", this.onMouseMove);
@@ -126,7 +131,13 @@ export class MinimapPointer {
         return clientY >= rect.top && clientY <= rect.bottom;
     }
 
-    private scrollToClientY(clientY: number) {
+    /**
+     * `jump` asks for the document position under the pointer rather than a
+     * scroll offset computed from it. A click wants the position; a scrub wants
+     * the offset, because the pointer is already moving and every pixel it
+     * covers has to be followed.
+     */
+    private scrollToClientY(clientY: number, jump = false) {
         const container = this.host.container;
         const scroller = this.host.getScroller();
         if (!container || !scroller) return;
@@ -139,6 +150,19 @@ export class MinimapPointer {
             0,
             metrics.activeHeight
         );
+
+        // Asked for a destination, name one. CodeMirror re-measures as it
+        // scrolls, so a position survives a height map that under-estimates the
+        // note; a pixel worked out from that same map does not.
+        if (
+            jump &&
+            this.dragMode === "document" &&
+            this.host.jumpToPosition(localY, this.host.centerOnClick)
+        ) {
+            this.host.onScrolled();
+            return;
+        }
+
         const scrollTop =
             this.dragMode === "thumb"
                 ? this.thumbScrollTop(localY, metrics)
