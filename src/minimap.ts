@@ -1183,20 +1183,29 @@ export class Minimap implements PointerHost {
      * Returns false when there is nothing better than the pixel mapping:
      * reading view, no anchors, or a position that resolves to no line.
      */
-    jumpToPosition(localY: number, center: boolean): boolean {
+    jumpToPosition(
+        localY: number,
+        metrics: ScrollMetrics,
+        center: boolean
+    ): boolean {
         if (!this.anchorsInUse) return false;
         const editorView = this.getEditorView();
         if (!editorView) return false;
-        const line = this.anchors.toEditorLine(
-            localY / Math.max(this.scale, 0.001)
-        );
+        // The panel is taller than the track on a long note, so it slides up as
+        // the note scrolls: what is drawn at `localY` is that much further into
+        // the note than `localY` says. Leaving the slide out of the sum is what
+        // put clicks a screen away even once the estimate was out of the way.
+        const contentY =
+            (localY + metrics.minimapScrollOffset) /
+            Math.max(this.scale, 0.001);
+        const line = this.anchors.toEditorLine(contentY);
         if (line === null || line < 1 || line > editorView.state.doc.lines)
             return false;
+        const pos = editorView.state.doc.line(line).from;
         editorView.dispatch({
-            effects: EditorView.scrollIntoView(
-                editorView.state.doc.line(line).from,
-                { y: center ? "center" : "start" }
-            ),
+            effects: EditorView.scrollIntoView(pos, {
+                y: center ? "center" : "start",
+            }),
         });
         return true;
     }

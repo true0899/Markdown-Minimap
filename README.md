@@ -199,6 +199,11 @@ to the one line that holds it — and the editor re-measures as it scrolls, so t
 jump lands where it was asked to. Dragging the marker still moves by offset, as
 it should: the pointer is already moving and every pixel has to be followed.
 
+The panel is also taller than the track on a long note, and slides up as the
+note scrolls, so the position under the pointer is the one drawn there plus how
+far the panel has slid. That slide is part of the sum: leaving it out put clicks
+a screen away on any note long enough to pan.
+
 **Screenshots and drawings are anchors too.** A heading is not the only place
 the two sides can agree on. An image embed is drawn at its real height in the
 panel and estimated in the editor, and the two only meet again at the next

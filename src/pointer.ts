@@ -23,7 +23,11 @@ export interface PointerHost {
      * Take the editor to the position drawn at `localY`, as a document
      * position. Returns false when only the pixel mapping can answer.
      */
-    jumpToPosition(localY: number, center: boolean): boolean;
+    jumpToPosition(
+        localY: number,
+        metrics: ScrollMetrics,
+        center: boolean
+    ): boolean;
     onScrolled(): void;
 }
 
@@ -40,6 +44,14 @@ export class MinimapPointer {
      * grabbed point drift out from under the pointer during a fast drag.
      */
     private grabFraction = 0;
+    /**
+     * A track drag asks for a destination on every frame it moves, rather than
+     * an offset: the pointer is naming a place to be, and offset scrolling only
+     * knows where that place is as well as the height map does. Coalesced to one
+     * jump a frame so a fast drag cannot queue a scroll per mouse event.
+     */
+    private pendingFrame = 0;
+    private pendingY = 0;
 
     constructor(host: PointerHost) {
         this.host = host;
@@ -59,6 +71,13 @@ export class MinimapPointer {
         hitbox?.removeEventListener("mouseleave", this.onLeave);
         activeDocument.removeEventListener("mousemove", this.onMouseMove);
         activeDocument.removeEventListener("mouseup", this.onMouseUp);
+        this.cancelPending();
+    }
+
+    private cancelPending() {
+        if (!this.pendingFrame) return;
+        window.cancelAnimationFrame(this.pendingFrame);
+        this.pendingFrame = 0;
     }
 
     // Driven from the hitbox rather than a :hover rule on the container: the
@@ -102,11 +121,27 @@ export class MinimapPointer {
 
     private onMouseMove = (event: MouseEvent) => {
         if (!this.dragging) return;
+        if (this.dragMode === "document") {
+            // Following the pointer by offset here would overwrite the answer
+            // the click just gave with the very estimate it exists to avoid, so
+            // a stray pixel of movement would put the jump back where it was.
+            // Re-aim instead, once a frame.
+            this.pendingY = event.clientY;
+            if (!this.pendingFrame) {
+                this.pendingFrame = window.requestAnimationFrame(() => {
+                    this.pendingFrame = 0;
+                    if (this.dragging && this.dragMode === "document")
+                        this.scrollToClientY(this.pendingY, true);
+                });
+            }
+            return;
+        }
         this.scrollToClientY(event.clientY);
     };
 
     private onMouseUp = () => {
         this.dragging = false;
+        this.cancelPending();
         this.host.slider?.classList.remove("dragging");
         activeDocument.removeEventListener("mousemove", this.onMouseMove);
         activeDocument.removeEventListener("mouseup", this.onMouseUp);
@@ -157,7 +192,7 @@ export class MinimapPointer {
         if (
             jump &&
             this.dragMode === "document" &&
-            this.host.jumpToPosition(localY, this.host.centerOnClick)
+            this.host.jumpToPosition(localY, metrics, this.host.centerOnClick)
         ) {
             this.host.onScrolled();
             return;
