@@ -126,6 +126,18 @@ function measureTextWidth(
 }
 
 /**
+ * Left margin the note keeps whatever the shift works out to.
+ *
+ * The shift is capped at the gap that exists, which is the file margin, so
+ * without a floor it takes the whole of it: the text starts flush against the
+ * pane's edge and the note reads as having lost its left side. The floor costs
+ * nothing in exchange — on any pane wide enough to matter the strip is far
+ * wider than the margin, so the last sixteen pixels were never what decided
+ * whether the text ran under it.
+ */
+const MINIMUM_LEFT_GAP = 16;
+
+/**
  * How far the note's text should move so the space either side of it looks
  * even once the minimap has taken its strip.
  *
@@ -146,7 +158,8 @@ function measureTextWidth(
  * scroller's padding, so the two right edges do not coincide.
  *
  * Clamped to the gap that actually exists, so the text can never be pushed off
- * the pane's left edge and clipped.
+ * the pane's left edge and clipped — minus a floor, so it does not end up
+ * sitting exactly on that edge either.
  */
 function reserveShift(
     this: void,
@@ -169,7 +182,11 @@ function reserveShift(
     const centring = Math.max(0, (available - textWidth) / 2);
     const leftGap = paddingLeft + centring;
     const rightGap = stripLeft - (innerRight - paddingRight - centring);
-    return clamp((leftGap - rightGap) / 2, 0, leftGap);
+    return clamp(
+        (leftGap - rightGap) / 2,
+        0,
+        Math.max(0, leftGap - MINIMUM_LEFT_GAP)
+    );
 }
 
 /**
